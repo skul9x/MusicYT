@@ -64,7 +64,7 @@ Nếu Anh muốn tự tay đóng gói ứng dụng:
 
 ## 📜 5. Bản quyền & Giấy phép
 
-Ứng dụng được thiết kế và phát triển bởi **Tuấn (Senior Developer)**. 
+Ứng dụng được thiết kế và phát triển bởi **Nguyễn Duy Trường**. 
 Bản quyền © 2026 **Nguyễn Duy Trường** • All Rights Reserved.
 
 ---
