@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema_version": "1.1.0",
+    "awf_version": "3.3.0"
+  },
+  "project": {
+    "name": "MusicYT",
+    "type": "Desktop App",
+    "status": "In Progress"
+  },
+  "tech_stack": {
+    "frontend": "React 18 + TypeScript + Tailwind CSS",
+    "backend": "Go (Wails v2.11)",
+    "engine": "yt-dlp",
+    "formatting": "m4a (audio only)"
+  },
+  "features": [
+    "Audio extraction (m4a high quality)",
+    "Real-time download progress tracking",
+    "Auto-suggest Downloads folder on load",
+    "Glassmorphism UI Redesign",
+    "YouTube URL validation",
+    "Keyboard Enter-key submission"
+  ]
+}
