@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -53,21 +57,177 @@ func (a *App) GetDefaultSavePath() string {
 }
 
 type DependencyStatus struct {
-	OK      bool   `json:"ok"`
-	Message string `json:"message"`
+	OK       bool   `json:"ok"`
+	Message  string `json:"message"`
+	OS       string `json:"os"`
+	YtdlpOK  bool   `json:"ytdlp_ok"`
+	FfmpegOK bool   `json:"ffmpeg_ok"`
 }
 
-// CheckDependencies checks if yt-dlp is available in the system PATH
+// CheckDependencies checks if yt-dlp and ffmpeg are available in the system PATH
 func (a *App) CheckDependencies() DependencyStatus {
+	ytdlpOK := true
+	ffmpegOK := true
+
 	_, err := exec.LookPath("yt-dlp")
 	if err != nil {
-		return DependencyStatus{OK: false, Message: "yt-dlp not found. Please install it."}
+		ytdlpOK = false
 	}
 	_, err = exec.LookPath("ffmpeg")
 	if err != nil {
-		return DependencyStatus{OK: false, Message: "ffmpeg not found. Needed for high quality audio."}
+		ffmpegOK = false
 	}
-	return DependencyStatus{OK: true, Message: "Dependencies OK"}
+
+	ok := ytdlpOK && ffmpegOK
+	msg := "Dependencies OK"
+	if !ok {
+		msg = "Missing dependencies"
+	}
+
+	return DependencyStatus{
+		OK:       ok,
+		Message:  msg,
+		OS:       runtime.GOOS,
+		YtdlpOK:  ytdlpOK,
+		FfmpegOK: ffmpegOK,
+	}
+}
+
+// DownloadFile downloads a file and emits progress
+func (a *App) DownloadFile(url string, dest string, eventName string) error {
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	buf := make([]byte, 1024*32) // 32KB
+	var downloaded int64
+	total := resp.ContentLength
+
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			out.Write(buf[0:n])
+			downloaded += int64(n)
+			if total > 0 {
+				progress := float64(downloaded) / float64(total) * 100
+				wailsRuntime.EventsEmit(a.ctx, eventName, progress)
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+	}
+	wailsRuntime.EventsEmit(a.ctx, eventName, 100.0)
+	return nil
+}
+
+// SetupWindowsDependencies automates Windows installation
+func (a *App) SetupWindowsDependencies() error {
+	if runtime.GOOS != "windows" {
+		return fmt.Errorf("this function is only for Windows")
+	}
+
+	toolsDir := "C:\\tools"
+	if err := os.MkdirAll(toolsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create C:\\tools: %v", err)
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "Đang tải yt-dlp...")
+	err := a.DownloadFile("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", filepath.Join(toolsDir, "yt-dlp.exe"), "install-progress")
+	if err != nil {
+		return fmt.Errorf("failed to download yt-dlp: %v", err)
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "Đang tải và giải nén ffmpeg (vui lòng chờ)...")
+	psScript := `
+	$ProgressPreference = 'SilentlyContinue'
+	Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "C:\tools\ffmpeg.zip"
+	Expand-Archive -Path "C:\tools\ffmpeg.zip" -DestinationPath "C:\tools\ffmpeg_extracted" -Force
+	Move-Item -Path "C:\tools\ffmpeg_extracted\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" -Destination "C:\tools\ffmpeg.exe" -Force
+	Remove-Item "C:\tools\ffmpeg.zip"
+	Remove-Item "C:\tools\ffmpeg_extracted" -Recurse -Force
+	`
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to install ffmpeg: %v", err)
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "Đang cập nhật biến môi trường (PATH)...")
+	pathScript := `
+	$currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+	if ($currentPath -notmatch "C:\\tools") {
+		$newPath = $currentPath + ";C:\tools"
+		[Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
+	}
+	`
+	cmd = exec.Command("powershell", "-NoProfile", "-Command", pathScript)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to update PATH: %v", err)
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "Hoàn tất cài đặt trên Windows!")
+	return nil
+}
+
+// SetupLinuxDependencies automates Linux installation using pkexec
+func (a *App) SetupLinuxDependencies() error {
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("this function is only for Linux")
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "Đang yêu cầu quyền quản trị (sudo)...")
+	script := `
+	curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && 
+	chmod a+rx /usr/local/bin/yt-dlp && 
+	apt-get update && 
+	apt-get install -y ffmpeg
+	`
+
+	cmd := exec.Command("pkexec", "bash", "-c", script)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("lỗi cài đặt: %v. Output: %s", err, string(output))
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "Hoàn tất cài đặt trên Linux!")
+	return nil
+}
+
+// UpdateYtdlp checks for and installs yt-dlp updates
+func (a *App) UpdateYtdlp() error {
+	wailsRuntime.EventsEmit(a.ctx, "install-status", "⏳ Đang kiểm tra và cập nhật yt-dlp...")
+	
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("yt-dlp", "-U")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Lỗi cập nhật: %v. Output: %s", err, string(output))
+		}
+		wailsRuntime.EventsEmit(a.ctx, "install-status", "✅ Hoàn tất cập nhật!")
+		return nil
+	} else if runtime.GOOS == "linux" {
+		wailsRuntime.EventsEmit(a.ctx, "install-status", "⏳ Đang yêu cầu quyền quản trị (sudo) để cập nhật...")
+		cmd := exec.Command("pkexec", "yt-dlp", "-U")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Lỗi cập nhật: %v. Output: %s", err, string(output))
+		}
+		wailsRuntime.EventsEmit(a.ctx, "install-status", "✅ Hoàn tất cập nhật!")
+		return nil
+	}
+	
+	return fmt.Errorf("hệ điều hành không được hỗ trợ")
 }
 
 // DownloadVideo starts downloading the video from the given URL to the target path

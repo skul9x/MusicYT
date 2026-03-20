@@ -20,6 +20,9 @@
     "Auto-suggest Downloads folder on load",
     "Glassmorphism UI Redesign",
     "YouTube URL validation",
-    "Keyboard Enter-key submission"
+    "Keyboard Enter-key submission",
+    "Automated dependency installer (Win/Linux)",
+    "Auto-update engine (yt-dlp -U)",
+    "One-click fix for downloader errors"
   ]
 }

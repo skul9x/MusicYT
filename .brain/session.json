@@ -1,14 +1,15 @@
 {
-  "updated_at": "2026-03-19T15:54:12+07:00",
+  "updated_at": "2026-03-20T15:31:00+07:00",
   "working_on": {
-    "feature": "UI/UX Redesign",
-    "task": "Finalized Glassmorphism vibe and UX touches",
+    "feature": "Dependency Management Automation",
+    "task": "Added updater and automated installers",
     "status": "completed",
     "files": [
       "frontend/src/App.tsx",
+      "frontend/src/components/InstallGuideModal.tsx",
       "app.go"
     ],
-    "notes": "Ready for Phase 04 quality selection"
+    "notes": "Now checks for yt-dlp/ffmpeg and provides one-click installers/updaters."
   },
   "pending_tasks": [
     {
@@ -22,24 +23,31 @@
   ],
   "recent_changes": [
     {
-      "timestamp": "2026-03-19T15:54:12+07:00",
+      "timestamp": "2026-03-20T15:31:00+07:00",
       "type": "feature",
-      "description": "Glassmorphism UI redesign and default save path logic",
+      "description": "Automated installer for Win/Linux tools and self-update mechanism",
       "files": [
         "frontend/src/App.tsx",
+        "frontend/src/components/InstallGuideModal.tsx",
         "app.go"
       ]
     }
   ],
-  "errors_encountered": [],
+  "errors_encountered": [
+    {
+      "error": "Missing yt-dlp on first run",
+      "solution": "Trigger InstallGuideModal automatically",
+      "resolved": true
+    }
+  ],
   "decisions_made": [
     {
-      "decision": "Glassmorphism UI",
-      "reason": "Modern music app aesthetic"
+      "decision": "Use pkexec for Linux",
+      "reason": "Security best practice for GUI sudo prompts"
     },
     {
-      "decision": "Default Downloads folder",
-      "reason": "UX efficiency"
+      "decision": "C:\\tools for Windows",
+      "reason": "Standard portable tool path"
     }
   ]
 }

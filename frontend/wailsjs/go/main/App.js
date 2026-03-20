@@ -6,6 +6,10 @@ export function CheckDependencies() {
   return window['go']['main']['App']['CheckDependencies']();
 }
 
+export function DownloadFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DownloadFile'](arg1, arg2, arg3);
+}
+
 export function DownloadVideo(arg1, arg2, arg3) {
   return window['go']['main']['App']['DownloadVideo'](arg1, arg2, arg3);
 }
@@ -20,4 +24,16 @@ export function GetVideoInfo(arg1) {
 
 export function SelectSavePath() {
   return window['go']['main']['App']['SelectSavePath']();
+}
+
+export function SetupLinuxDependencies() {
+  return window['go']['main']['App']['SetupLinuxDependencies']();
+}
+
+export function SetupWindowsDependencies() {
+  return window['go']['main']['App']['SetupWindowsDependencies']();
+}
+
+export function UpdateYtdlp() {
+  return window['go']['main']['App']['UpdateYtdlp']();
 }

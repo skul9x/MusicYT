@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
+import InstallGuideModal from './components/InstallGuideModal';
 
 function App() {
     const [url, setUrl] = useState('');
@@ -9,20 +10,22 @@ function App() {
     const [progress, setProgress] = useState(0);
     const [isDownloading, setIsDownloading] = useState(false);
     const [statusMessage, setStatusMessage] = useState('Sẵn sàng tải xuống');
-    const [depStatus, setDepStatus] = useState({ ok: true, msg: '' });
+    const [depStatus, setDepStatus] = useState({ ok: true, msg: '', os: 'win' });
     const [format, setFormat] = useState('best');
     const [showGuide, setShowGuide] = useState(false);
-    const [osTab, setOsTab] = useState('win');
 
     useEffect(() => {
-        // 1. Check dependencies
-        CheckDependencies().then((res: any) => {
-            setDepStatus({ ok: res.ok, msg: res.message });
+        const checkDeps = async () => {
+            const res = await CheckDependencies() as any;
+            setDepStatus({ ok: res.ok, msg: res.message, os: res.os });
             if (!res.ok) {
-                setStatusMessage(`Lỗi hệ thống: ${res.message}`);
-                setShowGuide(true); // Tự động hiện hướng dẫn nếu lỗi
+                setStatusMessage(`Lỗi: ${res.message}`);
+                setShowGuide(true);
+            } else {
+                setShowGuide(false);
             }
-        });
+        };
+        checkDeps();
 
         // 2. Get default save path
         GetDefaultSavePath().then((path) => {
@@ -185,69 +188,20 @@ function App() {
 
                         {/* Guide Section */}
                         {showGuide && (
-                            <div className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500 bg-white/[0.02] -mx-10 px-10 border-y border-white/[0.05] py-8">
-                                <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
-                                    Hướng dẫn Cài đặt
-                                </h3>
-                                
-                                {/* OS Tabs */}
-                                <div className="flex gap-1 p-1 bg-black/40 rounded-lg border border-white/5 w-fit">
-                                    <button 
-                                        onClick={() => setOsTab('win')}
-                                        className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${osTab === 'win' ? 'bg-emerald-500 text-black' : 'text-slate-500 hover:text-slate-300'}`}
-                                    >
-                                        Windows
-                                    </button>
-                                    <button 
-                                        onClick={() => setOsTab('linux')}
-                                        className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${osTab === 'linux' ? 'bg-orange-500 text-black' : 'text-slate-500 hover:text-slate-300'}`}
-                                    >
-                                        Linux
-                                    </button>
-                                </div>
-
-                                <div className="space-y-5">
-                                    {osTab === 'win' ? (
-                                        <>
-                                            <div className="space-y-2">
-                                                <p className="text-[11px] font-black text-slate-300 uppercase tracking-tighter">B1: Tải yt-dlp & ffmpeg</p>
-                                                <div className="flex gap-2 text-[10px] font-bold">
-                                                    <a href="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" target="_blank" className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all text-slate-300">yt-dlp.exe</a>
-                                                    <a href="https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" target="_blank" className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all text-slate-300">ffmpeg.zip</a>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <p className="text-[11px] font-black text-slate-300 uppercase tracking-tighter">B2: Copy & Set PATH</p>
-                                                <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                                                    Copy vào <code className="bg-white/5 px-1 rounded text-emerald-400 underline decoration-dotted">C:\tools\</code>, sau đó thêm vào 
-                                                    <span className="text-slate-300 ml-1 italic font-bold">Environment Variables (PATH)</span>.
-                                                </p>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="space-y-2">
-                                                <p className="text-[11px] font-black text-slate-300 uppercase tracking-tighter">B1: Cài đặt yt-dlp</p>
-                                                <code className="block bg-black/60 border border-white/5 p-3 rounded-lg text-[10px] text-orange-400 font-mono break-all leading-relaxed">
-                                                    sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && sudo chmod a+rx /usr/local/bin/yt-dlp
-                                                </code>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <p className="text-[11px] font-black text-slate-300 uppercase tracking-tighter">B2: Cài đặt ffmpeg</p>
-                                                <code className="block bg-black/60 border border-white/5 p-3 rounded-lg text-[10px] text-orange-400 font-mono break-all">
-                                                    sudo apt update && sudo apt install ffmpeg
-                                                </code>
-                                            </div>
-                                        </>
-                                    )}
-                                    <div className={`${osTab === 'win' ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-orange-500/5 border-orange-500/10'} p-3 rounded-xl border`}>
-                                        <p className={`text-[10px] ${osTab === 'win' ? 'text-emerald-400/80' : 'text-orange-400/80'} leading-relaxed italic font-medium`}>
-                                            💡 "Xong bước này, app của Anh sẽ bốc lửa ngay!"
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                            <InstallGuideModal 
+                                detectedOs={depStatus.os} 
+                                isFullyInstalled={depStatus.ok}
+                                onClose={() => setShowGuide(false)} 
+                                onSuccess={() => {
+                                    CheckDependencies().then((res: any) => {
+                                        setDepStatus({ ok: res.ok, msg: res.message, os: res.os });
+                                        if (res.ok) {
+                                            setStatusMessage('Sẵn sàng tải xuống');
+                                            setShowGuide(false);
+                                        }
+                                    });
+                                }}
+                            />
                         )}
 
                         {/* Progress or Button */}

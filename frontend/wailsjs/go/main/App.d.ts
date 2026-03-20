@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function CheckDependencies():Promise<main.DependencyStatus>;
 
+export function DownloadFile(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function DownloadVideo(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function GetDefaultSavePath():Promise<string>;
@@ -11,3 +13,9 @@ export function GetDefaultSavePath():Promise<string>;
 export function GetVideoInfo(arg1:string):Promise<string>;
 
 export function SelectSavePath():Promise<string>;
+
+export function SetupLinuxDependencies():Promise<void>;
+
+export function SetupWindowsDependencies():Promise<void>;
+
+export function UpdateYtdlp():Promise<void>;

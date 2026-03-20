@@ -9,6 +9,8 @@
 - **Tải nhạc High-Res:** Tự động trích xuất âm thanh chất lượng cao định dạng `.m4a`.
 - **Gắn Cover Art:** Tự động tải và nhúng ảnh đại diện (Thumbnail) của YouTube vào file nhạc cực đẹp. 🖼️
 - **Đa dạng chất lượng:** Hỗ trợ tải Video 1080p Full HD, 720p HD hoặc chỉ lấy âm thanh.
+- **Tự động cài đặt (Automated Setup):** App tự động kiểm tra và tải về `yt-dlp` + `ffmpeg` chỉ bằng 1 cú click. 🚀
+- **Nút Update thần thánh:** Khi Youtube thay đổi thuật toán, anh chỉ cần nhấn nút "Fix Lỗi Tải Video" để app tự cập nhật bản mới nhất. 🔄
 - **Giao diện Glassmorphism:** Hiệu ứng làm mờ kính hiện đại, hỗ trợ Dark Mode và animation mượt mà.
 - **Bảo vệ người dùng:** Tự chọn thư mục tải mặc định, chặn tải Playlist lớn để tránh treo máy.
 - **Tốc độ:** Tận dụng tối đa sức mạnh của `yt-dlp` - engine tải video tốt nhất hiện nay.
@@ -17,7 +19,14 @@
 
 ## 🚀 2. Hướng dẫn cài đặt
 
-MusicYT là ứng dụng "Portable" siêu nhẹ, Anh chỉ cần tải về và chạy ngay. Tuy nhiên, để app hoạt động tốt nhất, Anh cần chuẩn bị 2 "động cơ" nhỏ sau:
+MusicYT là ứng dụng "Portable" siêu nhẹ, Anh chỉ cần tải về và chạy ngay. 
+**App đã tích hợp tính năng tự động cài đặt công cụ cần thiết (yt-dlp & ffmpeg) ngay bên trong ứng dụng.**
+
+Nếu Anh khởi động lần đầu và thấy thông báo thiếu công cụ:
+1. Nhấn vào nút dấu hỏi chấm **`?`** (hoặc nó sẽ tự hiện).
+2. Chọn đúng hệ điều hành (Windows hoặc Linux).
+3. Nhấn **"Bắt đầu tự khởi tạo"** - App sẽ lo liệu phần còn lại cho Anh (tải tool, set PATH, xin quyền...).
+
 
 ### Cho Windows:
 1.  Tải **yt-dlp.exe** từ [GitHub](https://github.com/yt-dlp/yt-dlp/releases).
