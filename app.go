@@ -277,6 +277,7 @@ func (a *App) SetupWindowsDependencies() error {
 	Remove-Item "C:\tools\ffmpeg_extracted" -Recurse -Force
 	`
 	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+	prepareCommand(cmd)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to install ffmpeg: %v", err)
 	}
@@ -290,6 +291,7 @@ func (a *App) SetupWindowsDependencies() error {
 	}
 	`
 	cmd = exec.Command("powershell", "-NoProfile", "-Command", pathScript)
+	prepareCommand(cmd)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to update PATH: %v", err)
 	}
@@ -313,6 +315,7 @@ func (a *App) SetupLinuxDependencies() error {
 	`
 
 	cmd := exec.Command("pkexec", "bash", "-c", script)
+	prepareCommand(cmd)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("lỗi cài đặt: %v. Output: %s", err, string(output))
@@ -328,6 +331,7 @@ func (a *App) UpdateYtdlp() error {
 	
 	if runtime.GOOS == "windows" {
 		cmd := exec.Command("yt-dlp", "-U")
+		prepareCommand(cmd)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("Lỗi cập nhật: %v. Output: %s", err, string(output))
@@ -337,6 +341,7 @@ func (a *App) UpdateYtdlp() error {
 	} else if runtime.GOOS == "linux" {
 		a.emitEvent("install-status", "⏳ Đang yêu cầu quyền quản trị (sudo) để cập nhật...")
 		cmd := exec.Command("pkexec", "yt-dlp", "-U")
+		prepareCommand(cmd)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("Lỗi cập nhật: %v. Output: %s", err, string(output))
@@ -363,7 +368,7 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 	// Format selection logic
 	switch formatOption {
 	case "m4a":
-		args = append(args, "-x", "--audio-format", "m4a", "--embed-thumbnail")
+		args = append(args, "-x", "--audio-format", "m4a", "--embed-thumbnail", "--convert-thumbnails", "jpg")
 	case "1080p":
 		args = append(args, "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]")
 	case "720p":
@@ -396,6 +401,7 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 	}()
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	prepareCommand(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -431,6 +437,7 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 func (a *App) GetVideoInfo(url string) (string, error) {
 	// Command: yt-dlp --dump-json --no-playlist [URL]
 	cmd := exec.Command("yt-dlp", "--dump-json", "--no-playlist", url)
+	prepareCommand(cmd)
 	
 	output, err := cmd.Output()
 	if err != nil {
@@ -457,7 +464,7 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 	case "m4a":
 		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a")
 	case "m4a_cover":
-		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a", "--embed-thumbnail")
+		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a", "--embed-thumbnail", "--convert-thumbnails", "jpg")
 	case "best":
 		fallthrough
 	default:
@@ -486,6 +493,7 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 	}()
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	prepareCommand(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -530,6 +538,7 @@ func (a *App) CancelDownload() {
 // GetGenericVideoInfo fetches metadata for any supported URL
 func (a *App) GetGenericVideoInfo(url string) (string, error) {
 	cmd := exec.Command("yt-dlp", "--dump-json", "--no-playlist", url)
+	prepareCommand(cmd)
 	
 	output, err := cmd.Output()
 	if err != nil {

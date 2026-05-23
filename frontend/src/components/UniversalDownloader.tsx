@@ -27,7 +27,7 @@ export default function UniversalDownloader({
     isSelectingPath
 }: Props) {
     const [url, setUrl] = useState('');
-    const [format, setFormat] = useState('best'); // 'best' (video), 'm4a' (audio only), 'm4a_cover' (audio + cover art)
+    const [format, setFormat] = useState('m4a_cover'); // 'best' (video), 'm4a' (audio only), 'm4a_cover' (audio + cover art)
 
     const detectPlatform = (urlStr: string) => {
         const lowerUrl = urlStr.toLowerCase().trim();
