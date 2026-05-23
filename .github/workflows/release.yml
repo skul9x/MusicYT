@@ -1,0 +1,260 @@
+name: Build and Release MusicYT
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  calculate-version:
+    runs-on: ubuntu-latest
+    outputs:
+      next_version: ${{ steps.versioning.outputs.next_version }}
+      next_version_num: ${{ steps.versioning.outputs.next_version_num }}
+    steps:
+      - name: Fetch Releases and Calculate Next Version
+        id: versioning
+        run: |
+          # Fetch all releases
+          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases)
+          
+          # Parse the highest tag name
+          HIGHEST_TAG=$(echo "$RELEASES" | jq -r '[.[] | select(.draft == false and .prerelease == false) | .tag_name] | sort_by(split(".") | map(sub("^v"; "") | tonumber)) | last')
+          
+          if [ "$HIGHEST_TAG" = "null" ] || [ -z "$HIGHEST_TAG" ]; then
+            HIGHEST_TAG=$(echo "$RELEASES" | jq -r '.[0].tag_name')
+          fi
+          
+          if [ "$HIGHEST_TAG" = "null" ] || [ -z "$HIGHEST_TAG" ]; then
+            HIGHEST_TAG="v1.0.1" # Mặc định nếu chưa có là v1.0.1 để tăng patch lên v1.0.2
+          fi
+          
+          echo "Highest release tag found: $HIGHEST_TAG"
+          
+          # Loại bỏ ký tự 'v'
+          VERSION_NUM=${HIGHEST_TAG#v}
+          
+          # Tăng phần PATCH (vd: 1.0.1 -> 1.0.2)
+          IFS='.' read -r major minor patch <<< "$VERSION_NUM"
+          patch=$((patch + 1))
+          
+          NEXT_VERSION="v$major.$minor.$patch"
+          NEXT_VERSION_NUM="$major.$minor.$patch"
+          
+          echo "Next Release Version: $NEXT_VERSION"
+          echo "Next Package Version: $NEXT_VERSION_NUM"
+          
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "next_version_num=$NEXT_VERSION_NUM" >> $GITHUB_OUTPUT
+
+  build-windows:
+    runs-on: windows-latest
+    needs: calculate-version
+    env:
+      VERSION_NUM: ${{ needs.calculate-version.outputs.next_version_num }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Sync version in package.json
+        shell: bash
+        run: |
+          cd frontend
+          jq --arg ver "$VERSION_NUM" '.version = $ver' package.json > temp.json && mv temp.json package.json
+          cat package.json
+
+      - name: Build Wails App for Windows
+        run: |
+          wails build -platform windows/amd64
+
+      - name: Rename compiled binary with version
+        shell: bash
+        run: |
+          mv build/bin/musicyt.exe build/bin/musicyt.exe
+
+      - name: Update Inno Setup script with version
+        shell: bash
+        run: |
+          sed -i "s/AppVersion=1.0.2/AppVersion=${VERSION_NUM}/g" build/windows/musicyt.iss
+          sed -i "s/musicyt_1.0.2_x64_installer/musicyt_${VERSION_NUM}_x64_installer/g" build/windows/musicyt.iss
+
+      - name: Build Windows Installer (Inno Setup)
+        run: |
+          iscc build\windows\musicyt.iss
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: build/bin/musicyt_${{ env.VERSION_NUM }}_x64_installer.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: calculate-version
+    env:
+      VERSION_NUM: ${{ needs.calculate-version.outputs.next_version_num }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev build-essential jq
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Sync version in package.json
+        run: |
+          cd frontend
+          jq --arg ver "$VERSION_NUM" '.version = $ver' package.json > temp.json && mv temp.json package.json
+
+      - name: Build Wails App for Linux (amd64)
+        run: |
+          wails build -platform linux/amd64
+
+      - name: Package Debian (.deb)
+        run: |
+          # 1. Tạo thư mục cấu trúc Debian
+          mkdir -p debian/DEBIAN
+          mkdir -p debian/usr/bin
+          mkdir -p debian/usr/share/applications
+          mkdir -p debian/usr/share/pixmaps
+          
+          # 2. Copy binary, desktop entry và icon
+          cp build/bin/musicyt debian/usr/bin/musicyt
+          cp build/linux/musicyt.desktop debian/usr/share/applications/musicyt.desktop
+          cp build/appicon.png debian/usr/share/pixmaps/musicyt.png
+          
+          # 3. Điền phiên bản vào control file và đảm bảo UTF-8
+          sed "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" build/linux/control.template > debian/DEBIAN/control
+          
+          # Set quyền thực thi cho binary
+          chmod 755 debian/usr/bin/musicyt
+          
+          # 4. Đóng gói .deb
+          dpkg-deb --build debian musicyt_${VERSION_NUM}_amd64.deb
+
+      - name: Package AppImage
+        run: |
+          # 1. Tạo thư mục cấu trúc AppDir
+          mkdir -p AppDir/usr/bin
+          cp build/bin/musicyt AppDir/usr/bin/musicyt
+          cp build/linux/musicyt.desktop AppDir/musicyt.desktop
+          cp build/appicon.png AppDir/musicyt.png
+          
+          # 2. Tạo AppRun shell script
+          cat << 'EOF' > AppDir/AppRun
+          #!/bin/sh
+          SELF=$(readlink -f "$0")
+          HERE=$(dirname "$SELF")
+          export LANG=vi_VN.UTF-8
+          export LC_ALL=vi_VN.UTF-8
+          exec "$HERE/usr/bin/musicyt" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
+          # 3. Tải appimagetool và đóng gói AppImage
+          wget https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          
+          # Chạy với --appimage-extract-and-run để không cần FUSE trên CI runner
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir musicyt_${VERSION_NUM}_x64.AppImage
+
+      - name: Copy raw binary with name
+        run: |
+          cp build/bin/musicyt musicyt_${VERSION_NUM}_linux_x64_binary
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            musicyt_${{ env.VERSION_NUM }}_amd64.deb
+            musicyt_${{ env.VERSION_NUM }}_x64.AppImage
+            musicyt_${{ env.VERSION_NUM }}_linux_x64_binary
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: [calculate-version, build-windows, build-linux]
+    env:
+      VERSION: ${{ needs.calculate-version.outputs.next_version }}
+      VERSION_NUM: ${{ needs.calculate-version.outputs.next_version_num }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: ./release-assets
+
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: ./release-assets
+
+      - name: Setup Git Credentials
+        run: |
+          git config --global user.name "Nguyễn Duy Trường"
+          git config --global user.email "skul9x@gmail.com"
+
+      - name: Create Git Tag
+        run: |
+          git tag ${{ env.VERSION }}
+          git push origin ${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release and Upload Assets
+        run: |
+          # Dùng GitHub CLI tích hợp để tạo Release và upload các file installer
+          gh release create ${{ env.VERSION }} \
+            --title "MusicYT ${{ env.VERSION }} - Bản Đóng Gói Đa Nền Tảng" \
+            --notes "🎵 **MusicYT ${{ env.VERSION }}** - Phiên bản đóng gói hoàn chỉnh cho Windows và Linux.
+
+          ### 📦 Các tệp tải xuống (Installer):
+          1. **Windows Installer**: \`musicyt_${{ env.VERSION_NUM }}_x64_installer.exe\` (Bộ cài dạng Wizard tiện lợi)
+          2. **Linux Debian/Ubuntu Package**: \`musicyt_${{ env.VERSION_NUM }}_amd64.deb\` (Tương thích tốt Ubuntu App Center, tích hợp font chữ hỗ trợ tiếng Việt)
+          3. **Linux Standalone AppImage**: \`musicyt_${{ env.VERSION_NUM }}_x64.AppImage\` (Chạy độc lập chỉ với một cú click, không cần cài đặt)
+          4. **Linux Raw Binary**: \`musicyt_${{ env.VERSION_NUM }}_linux_x64_binary\` (Dành cho nhà phát triển)
+
+          ---
+          ### ✨ Cập nhật nổi bật:
+          - **Đa Nền Tảng (Tab Đa Nền Tảng)**: Tải video/audio từ bất kỳ nền tảng nào (TikTok, Douyin, Facebook, Bilibili...)
+          - **Auto-Detect Platform Badge**: Tự động nhận diện thương hiệu logo mạng xã hội khi dán link.
+          - **Sửa Lỗi Tải Video (ffprobe)**: Tự động cài đặt \`ffprobe.exe\` trên Windows để sửa triệt để lỗi codec âm thanh.
+          - **UI Cực Chất (Vibe Cosing)**: Giao diện Glassmorphism mượt mà và trực quan.
+          
+          *Phát hành tự động bởi Antigravity DevOps Pipeline 🚀*" \
+            ./release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

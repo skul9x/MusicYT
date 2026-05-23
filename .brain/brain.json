@@ -10,19 +10,22 @@
   },
   "tech_stack": {
     "frontend": "React 18 + TypeScript + Tailwind CSS",
-    "backend": "Go (Wails v2.11)",
-    "engine": "yt-dlp",
-    "formatting": "m4a (audio only)"
+    "backend": "Go (Wails v2.12.0)",
+    "engine": "yt-dlp + ffmpeg + ffprobe",
+    "formatting": "m4a (audio only), mp4 (video)"
   },
   "features": [
-    "Audio extraction (m4a high quality)",
+    "YouTube Music Tab (Default m4a audio only high quality)",
+    "Đa Nền Tảng Tab (Universal download for TikTok, Douyin, Facebook, Instagram, Twitter/X, Bilibili...)",
+    "Auto-Detect Platform Badge on pasting URLs",
     "Real-time download progress tracking",
     "Auto-suggest Downloads folder on load",
-    "Glassmorphism UI Redesign",
+    "Glassmorphism UI Redesign with Premium custom tabs",
     "YouTube URL validation",
     "Keyboard Enter-key submission",
     "Automated dependency installer (Win/Linux)",
     "Auto-update engine (yt-dlp -U)",
-    "One-click fix for downloader errors"
+    "One-click fix for downloader errors",
+    "Automatic ffprobe downloader for audio extraction support on Windows"
   ]
 }

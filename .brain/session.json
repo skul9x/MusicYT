@@ -1,53 +1,58 @@
 {
-  "updated_at": "2026-03-20T15:31:00+07:00",
+  "updated_at": "2026-05-23T17:58:00+07:00",
   "working_on": {
-    "feature": "Dependency Management Automation",
-    "task": "Added updater and automated installers",
+    "feature": "Universal Video Downloader & Default Audio Selection",
+    "task": "Completed Wails tabbed interface, defaulted YouTube Music to m4a format, implemented multi-platform backend generic downloader, added missing Windows ffprobe dependency, and successfully ran Go unit tests",
     "status": "completed",
     "files": [
+      "app.go",
       "frontend/src/App.tsx",
-      "frontend/src/components/InstallGuideModal.tsx",
-      "app.go"
+      "frontend/src/components/UniversalDownloader.tsx",
+      "frontend/wailsjs/go/main/App.js",
+      "frontend/wailsjs/go/main/App.d.ts",
+      "app_test.go"
     ],
-    "notes": "Now checks for yt-dlp/ffmpeg and provides one-click installers/updaters."
+    "notes": "Added a glassmorphic tab-selector interface. Solved a critical Windows environment bug where lack of ffprobe.exe caused postprocessing extraction to fail on TikTok."
   },
   "pending_tasks": [
     {
-      "task": "Implement Quality Selection (Phase 04)",
-      "priority": "high"
-    },
-    {
-      "task": "Playlist handling",
+      "task": "Build the final production package using: wails build -platform windows/amd64 -nsis",
       "priority": "medium"
     }
   ],
   "recent_changes": [
     {
-      "timestamp": "2026-03-20T15:31:00+07:00",
+      "timestamp": "2026-05-23T17:58:00+07:00",
       "type": "feature",
-      "description": "Automated installer for Win/Linux tools and self-update mechanism",
+      "description": "Multi-platform video downloader, YouTube Audio-only default format, integrated ffprobe binary downloader, and robust Go testing suite.",
       "files": [
+        "app.go",
         "frontend/src/App.tsx",
-        "frontend/src/components/InstallGuideModal.tsx",
-        "app.go"
+        "frontend/src/components/UniversalDownloader.tsx",
+        "app_test.go"
       ]
     }
   ],
   "errors_encountered": [
     {
-      "error": "Missing yt-dlp on first run",
-      "solution": "Trigger InstallGuideModal automatically",
+      "error": "yt-dlp Postprocessing: WARNING: unable to obtain file audio codec with ffprobe",
+      "solution": "Downloaded and extracted ffprobe.exe alongside ffmpeg.exe in C:\\tools\\, solving all Windows audio postprocessing issues.",
+      "resolved": true
+    },
+    {
+      "error": "JSX closing tags mismatch in App.tsx",
+      "solution": "Corrected the self-closing tag on UniversalDownloader and div matching syntax.",
       "resolved": true
     }
   ],
   "decisions_made": [
     {
-      "decision": "Use pkexec for Linux",
-      "reason": "Security best practice for GUI sudo prompts"
+      "decision": "Add a dedicated 'Đa Nền Tảng' tab",
+      "reason": "Simplifies UX by keeping YouTube's advanced options isolated from other multi-platform simple video/audio extraction."
     },
     {
-      "decision": "C:\\tools for Windows",
-      "reason": "Standard portable tool path"
+      "decision": "2 format choices (Video/Audio) for Đa Nền Tảng tab",
+      "reason": "Users typically download from TikTok/FB/Instagram as either raw video or parsed audio only."
     }
   ]
 }

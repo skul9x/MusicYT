@@ -1,18 +1,22 @@
 /// <reference path="../wailsjs/runtime/runtime.d.ts" />
 import { useState, useEffect } from 'react';
-import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath } from '../wailsjs/go/main/App';
+import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath, OpenOutputFolder, CancelDownload, IsAppReady } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import InstallGuideModal from './components/InstallGuideModal';
+import UniversalDownloader from './components/UniversalDownloader';
 
 function App() {
+    const [activeTab, setActiveTab] = useState<'youtube' | 'universal'>('youtube');
     const [url, setUrl] = useState('');
     const [saveLocation, setSaveLocation] = useState('');
     const [progress, setProgress] = useState(0);
     const [isDownloading, setIsDownloading] = useState(false);
     const [statusMessage, setStatusMessage] = useState('Sẵn sàng tải xuống');
     const [depStatus, setDepStatus] = useState({ ok: true, msg: '', os: 'win' });
-    const [format, setFormat] = useState('best');
+    const [format, setFormat] = useState('m4a');
     const [showGuide, setShowGuide] = useState(false);
+    const [appReady, setAppReady] = useState(false);
+    const [isSelectingPath, setIsSelectingPath] = useState(false);
 
     useEffect(() => {
         const checkDeps = async () => {
@@ -27,6 +31,21 @@ function App() {
         };
         checkDeps();
 
+        // Check if app backend is ready
+        const checkReady = async () => {
+            try {
+                const ready = await IsAppReady();
+                setAppReady(ready);
+                if (ready) {
+                    clearInterval(readyInterval);
+                }
+            } catch {
+                setAppReady(false);
+            }
+        };
+        const readyInterval = setInterval(checkReady, 1000);
+        checkReady();
+
         // 2. Get default save path
         GetDefaultSavePath().then((path) => {
             setSaveLocation(path);
@@ -38,7 +57,10 @@ function App() {
             if (!isNaN(num)) setProgress(num);
         });
 
-        return () => unoff();
+        return () => {
+            unoff();
+            clearInterval(readyInterval);
+        };
     }, []);
 
     const isValidYT = (url: string) => {
@@ -47,11 +69,30 @@ function App() {
     };
 
     const handleSelectPath = async () => {
+        if (isSelectingPath) return; // Chặn spam click ở mức Frontend
+        setIsSelectingPath(true);
         try {
-            const path = await SelectSavePath();
-            if (path) setSaveLocation(path);
-        } catch (err) {
-            console.error(err);
+            // Truyền saveLocation hiện tại vào để mở đúng thư mục
+            const path = await SelectSavePath(saveLocation);
+            if (path) {
+                setSaveLocation(path);
+                setStatusMessage('Sẵn sàng tải xuống');
+            }
+        } catch (err: any) {
+            const errMsg = err?.toString() || 'Lỗi không xác định';
+            console.error('SelectSavePath error:', errMsg);
+
+            if (errMsg.includes('chưa sẵn sàng')) {
+                setStatusMessage('⚠️ Ứng dụng đang khởi tạo, vui lòng thử lại sau giây lát.');
+            } else if (errMsg.includes('đang được mở')) {
+                setStatusMessage('⚠️ Hộp thoại chọn thư mục đã mở, hãy kiểm tra trên thanh tác vụ.');
+            } else if (errMsg.includes('hộp thoại')) {
+                setStatusMessage('⚠️ Không thể mở hộp thoại chọn thư mục. Hãy nhập đường dẫn thủ công.');
+            } else {
+                setStatusMessage(`⚠️ Lỗi chọn thư mục: ${errMsg}`);
+            }
+        } finally {
+            setIsSelectingPath(false); // Reset trạng thái khi hoàn tất
         }
     };
 
@@ -74,7 +115,11 @@ function App() {
             setStatusMessage("🎉 Hoàn tất! Nhạc đã nằm trong máy anh.");
             setProgress(100);
         } catch (err: any) {
-            setStatusMessage(`❌ Lỗi: ${err}`);
+            if (err.toString().includes("context canceled") || err.toString().includes("killed")) {
+                setStatusMessage("❌ Đã hủy tải nhạc theo yêu cầu.");
+            } else {
+                setStatusMessage(`❌ Lỗi: ${err}`);
+            }
         } finally {
             setIsDownloading(false);
         }
@@ -102,8 +147,46 @@ function App() {
                         <span className="text-white">Music</span>
                         <span className="text-transparent bg-clip-text bg-gradient-to-tr from-emerald-400 to-cyan-400">YT</span>
                     </h1>
-                    <p className="text-slate-500 font-medium tracking-wide">Tải nhạc chất lượng cao m4a nhanh chóng</p>
+                    <p className="text-slate-500 font-medium tracking-wide">Tải nhạc hoặc video nhanh chóng</p>
                 </header>
+
+                {/* Tabs */}
+                <div className="flex justify-center mb-10">
+                    <div className="flex gap-1.5 p-1.5 bg-white/[0.02] border border-white/[0.06] backdrop-blur-2xl rounded-2xl relative shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
+                        <button
+                            onClick={() => {
+                                if (!isDownloading) {
+                                    setActiveTab('youtube');
+                                    setStatusMessage('Sẵn sàng tải xuống');
+                                }
+                            }}
+                            disabled={isDownloading}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+                                activeTab === 'youtube'
+                                    ? 'bg-gradient-to-br from-emerald-500 to-cyan-500 text-black shadow-lg shadow-emerald-500/20 scale-[1.02]'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                            }`}
+                        >
+                            <span>🎵</span> YouTube Music
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (!isDownloading) {
+                                    setActiveTab('universal');
+                                    setStatusMessage('Sẵn sàng tải xuống');
+                                }
+                            }}
+                            disabled={isDownloading}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+                                activeTab === 'universal'
+                                    ? 'bg-gradient-to-br from-emerald-500 to-cyan-500 text-black shadow-lg shadow-emerald-500/20 scale-[1.02]'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                            }`}
+                        >
+                            <span>🌐</span> Đa Nền Tảng
+                        </button>
+                    </div>
+                </div>
 
                 <main className="flex-1 max-w-xl mx-auto w-full space-y-8">
                     {/* Glass Card */}
@@ -111,125 +194,146 @@ function App() {
                         {/* Subtle internal glow */}
                         <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"></div>
 
-                        {/* URL Input Group */}
-                        <div className="space-y-3 relative">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">YouTube URL</label>
-                            <div className="relative">
-                                <input 
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/40 transition-all placeholder:text-slate-700 text-lg" 
-                                    onChange={(e) => setUrl(e.target.value)} 
-                                    onKeyDown={handleKeyDown}
-                                    value={url}
-                                    disabled={isDownloading}
-                                    autoComplete="off" 
-                                    placeholder="Dán link tại đây..."
-                                    type="text"
-                                />
-                                {url && isValidYT(url) && !isDownloading && (
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-in fade-in zoom-in">
-                                        ✨
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Save Location & Action */}
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between px-1">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Lưu vào</span>
-                                <button 
-                                    onClick={handleSelectPath}
-                                    disabled={isDownloading}
-                                    className="text-[11px] font-black text-emerald-400 hover:text-emerald-300 transition-colors uppercase tracking-widest border-b border-emerald-500/30 border-dashed"
-                                >
-                                    Thay đổi
-                                </button>
-                                <button 
-                                    onClick={() => setShowGuide(!showGuide)}
-                                    className={`text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center transition-all ${showGuide ? 'bg-emerald-500 text-black' : 'bg-white/5 text-slate-500 hover:text-emerald-400 border border-white/10'}`}
-                                >
-                                    ?
-                                </button>
-                            </div>
-                            <div className="bg-black/20 rounded-xl px-4 py-3 flex items-center gap-3 border border-white/5">
-                                <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                                <span className="text-xs text-slate-400 truncate font-mono">{saveLocation || "Chưa chọn..."}</span>
-                            </div>
-                        </div>
-
-                        {/* Format Selection Case */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Định dạng & Chất lượng</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {[
-                                    { id: 'best', label: 'Tốt nhất', sub: 'Video + Audio' },
-                                    { id: '1080p', label: '1080p', sub: 'Full HD' },
-                                    { id: '720p', label: '720p', sub: 'HD' },
-                                    { id: 'm4a', label: 'Chỉ Âm thanh', sub: 'm4a + cover' },
-                                ].map((opt) => (
-                                    <button
-                                        key={opt.id}
-                                        onClick={() => setFormat(opt.id)}
-                                        disabled={isDownloading}
-                                        className={`flex flex-col items-start p-3 rounded-xl border transition-all ${
-                                            format === opt.id 
-                                            ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/30' 
-                                            : 'bg-black/20 border-white/5 hover:border-white/20'
-                                        }`}
-                                    >
-                                        <span className={`text-[11px] font-black uppercase tracking-tight ${format === opt.id ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                            {opt.label}
-                                        </span>
-                                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">{opt.sub}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Guide Section */}
-                        {showGuide && (
-                            <InstallGuideModal 
-                                detectedOs={depStatus.os} 
-                                isFullyInstalled={depStatus.ok}
-                                onClose={() => setShowGuide(false)} 
-                                onSuccess={() => {
-                                    CheckDependencies().then((res: any) => {
-                                        setDepStatus({ ok: res.ok, msg: res.message, os: res.os });
-                                        if (res.ok) {
-                                            setStatusMessage('Sẵn sàng tải xuống');
-                                            setShowGuide(false);
-                                        }
-                                    });
-                                }}
-                            />
-                        )}
-
-                        {/* Progress or Button */}
-                        <div className="pt-2">
-                            {isDownloading ? (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-                                    <div className="flex justify-between items-end">
-                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] animate-pulse">Đang nén dữ liệu...</span>
-                                        <span className="text-2xl font-black text-white">{progress.toFixed(0)}%</span>
-                                    </div>
-                                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                        <div 
-                                            className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-500 bg-[length:200%_100%] animate-gradient transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.3)]" 
-                                            style={{ width: `${progress}%` }}
-                                        ></div>
+                        {activeTab === 'youtube' ? (
+                            <>
+                                {/* URL Input Group */}
+                                <div className="space-y-3 relative">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">YouTube URL</label>
+                                    <div className="relative">
+                                        <input 
+                                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/40 transition-all placeholder:text-slate-700 text-lg" 
+                                            onChange={(e) => setUrl(e.target.value)} 
+                                            onKeyDown={handleKeyDown}
+                                            value={url}
+                                            disabled={isDownloading}
+                                            autoComplete="off" 
+                                            placeholder="Dán link YouTube tại đây..."
+                                            type="text"
+                                        />
+                                        {url && isValidYT(url) && !isDownloading && (
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-in fade-in zoom-in">
+                                                ✨
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            ) : (
-                                <button 
-                                    className="w-full bg-gradient-to-br from-emerald-500 to-cyan-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:grayscale text-black font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)] flex items-center justify-center gap-3 transition-all duration-300 text-sm tracking-widest uppercase" 
-                                    onClick={handleDownload}
-                                    disabled={!url || !saveLocation || !depStatus.ok}
-                                >
-                                    Bắt đầu tải
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </button>
-                            )}
-                        </div>
+
+                                {/* Save Location & Action */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between px-1">
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Lưu vào</span>
+                                        <div className="flex items-center gap-3">
+                                            <button 
+                                                onClick={() => saveLocation && OpenOutputFolder(saveLocation).catch(err => setStatusMessage(`❌ ${err}`))}
+                                                disabled={isDownloading || !saveLocation}
+                                                className="text-[11px] font-black text-cyan-400 hover:text-cyan-300 transition-colors uppercase tracking-widest border-b border-cyan-500/30 border-dashed disabled:opacity-30"
+                                            >
+                                                📂 Mở thư mục
+                                            </button>
+                                            <button 
+                                                onClick={handleSelectPath}
+                                                disabled={isDownloading || !appReady || isSelectingPath}
+                                                className="text-[11px] font-black text-emerald-400 hover:text-emerald-300 transition-colors uppercase tracking-widest border-b border-emerald-500/30 border-dashed disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-emerald-400 disabled:no-underline"
+                                            >
+                                                Thay đổi
+                                            </button>
+                                            <button 
+                                                onClick={() => setShowGuide(!showGuide)}
+                                                className={`text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center transition-all ${showGuide ? 'bg-emerald-500 text-black' : 'bg-white/5 text-slate-500 hover:text-emerald-400 border border-white/10'}`}
+                                            >
+                                                ?
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-black/20 rounded-xl px-4 py-3 flex items-center gap-3 border border-white/5">
+                                        <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                                        <span className="text-xs text-slate-400 truncate font-mono">{saveLocation || "Chưa chọn..."}</span>
+                                    </div>
+                                </div>
+
+                                {/* Format Selection Case */}
+                                <div className="space-y-3">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Định dạng & Chất lượng</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { id: 'best', label: 'Tốt nhất', sub: 'Video + Audio' },
+                                            { id: '1080p', label: '1080p', sub: 'Full HD' },
+                                            { id: '720p', label: '720p', sub: 'HD' },
+                                            { id: 'm4a', label: 'Chỉ Âm thanh', sub: 'm4a + cover' },
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.id}
+                                                onClick={() => setFormat(opt.id)}
+                                                disabled={isDownloading}
+                                                className={`flex flex-col items-start p-3 rounded-xl border transition-all ${
+                                                    format === opt.id 
+                                                    ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/30' 
+                                                    : 'bg-black/20 border-white/5 hover:border-white/20'
+                                                }`}
+                                            >
+                                                <span className={`text-[11px] font-black uppercase tracking-tight ${format === opt.id ? 'text-emerald-400' : 'text-slate-300'}`}>
+                                                    {opt.label}
+                                                </span>
+                                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">{opt.sub}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Progress or Button */}
+                                <div className="pt-2">
+                                    {isDownloading ? (
+                                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                                            <div className="flex justify-between items-end">
+                                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] animate-pulse">Đang nén dữ liệu...</span>
+                                                <span className="text-2xl font-black text-white">{progress.toFixed(0)}%</span>
+                                            </div>
+                                            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-500 bg-[length:200%_100%] animate-gradient transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.3)]" 
+                                                    style={{ width: `${progress}%` }}
+                                                ></div>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    setStatusMessage("⏳ Đang gửi yêu cầu hủy...");
+                                                    try {
+                                                        await CancelDownload();
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                    }
+                                                }}
+                                                className="w-full mt-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold py-2.5 rounded-xl border border-rose-500/20 hover:border-rose-500/40 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
+                                            >
+                                                🚫 Hủy tải nhạc
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            className="w-full bg-gradient-to-br from-emerald-500 to-cyan-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:grayscale text-black font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)] flex items-center justify-center gap-3 transition-all duration-300 text-sm tracking-widest uppercase" 
+                                            onClick={handleDownload}
+                                            disabled={!url || !saveLocation || !depStatus.ok}
+                                        >
+                                            Bắt đầu tải
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h14a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <UniversalDownloader
+                                                saveLocation={saveLocation}
+                                                handleSelectPath={handleSelectPath}
+                                                isDownloading={isDownloading}
+                                                setIsDownloading={setIsDownloading}
+                                                progress={progress}
+                                                setProgress={setProgress}
+                                                depStatus={depStatus}
+                                                setStatusMessage={setStatusMessage}
+                                                appReady={appReady}
+                                                isSelectingPath={isSelectingPath}
+                            />
+                        )}
                     </div>
 
                     {/* Footer Feedback */}
@@ -265,6 +369,18 @@ function App() {
                     animation: gradient 3s ease infinite;
                 }
             `}</style>
+            {showGuide && (
+                <InstallGuideModal
+                    detectedOs={depStatus.os}
+                    isFullyInstalled={depStatus.ok}
+                    onClose={() => setShowGuide(false)}
+                    onSuccess={async () => {
+                        setShowGuide(false);
+                        const res = await CheckDependencies() as any;
+                        setDepStatus({ ok: res.ok, msg: res.message, os: res.os });
+                    }}
+                />
+            )}
         </div>
     )
 }

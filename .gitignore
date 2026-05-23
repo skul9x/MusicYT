@@ -31,3 +31,7 @@ go.sum
 # OS
 .DS_Store
 Thumbs.db
+
+# Scratch
+scratch/
+
