@@ -82,11 +82,6 @@ jobs:
         run: |
           wails build -platform windows/amd64
 
-      - name: Rename compiled binary with version
-        shell: bash
-        run: |
-          mv build/bin/musicyt.exe build/bin/musicyt.exe
-
       - name: Update Inno Setup script with version
         shell: bash
         run: |
@@ -186,7 +181,7 @@ jobs:
           chmod +x AppDir/AppRun
           
           # 3. Tải appimagetool và đóng gói AppImage
-          wget https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+          wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           
           # Chạy với --appimage-extract-and-run để không cần FUSE trên CI runner
