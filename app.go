@@ -266,12 +266,13 @@ func (a *App) SetupWindowsDependencies() error {
 		return fmt.Errorf("failed to download yt-dlp: %v", err)
 	}
 
-	a.emitEvent("install-status", "Đang tải và giải nén ffmpeg (vui lòng chờ)...")
+	a.emitEvent("install-status", "Đang tải và giải nén ffmpeg và ffprobe (vui lòng chờ)...")
 	psScript := `
 	$ProgressPreference = 'SilentlyContinue'
 	Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "C:\tools\ffmpeg.zip"
 	Expand-Archive -Path "C:\tools\ffmpeg.zip" -DestinationPath "C:\tools\ffmpeg_extracted" -Force
 	Move-Item -Path "C:\tools\ffmpeg_extracted\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" -Destination "C:\tools\ffmpeg.exe" -Force
+	Move-Item -Path "C:\tools\ffmpeg_extracted\ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe" -Destination "C:\tools\ffprobe.exe" -Force
 	Remove-Item "C:\tools\ffmpeg.zip"
 	Remove-Item "C:\tools\ffmpeg_extracted" -Recurse -Force
 	`
