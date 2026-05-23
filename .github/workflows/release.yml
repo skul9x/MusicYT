@@ -146,17 +146,22 @@ jobs:
           mkdir -p debian/usr/bin
           mkdir -p debian/usr/share/applications
           mkdir -p debian/usr/share/pixmaps
+          mkdir -p debian/usr/share/metainfo
           
-          # 2. Copy binary, desktop entry và icon
+          # 2. Copy binary, desktop entry, icon và AppStream metainfo
           cp build/bin/musicyt debian/usr/bin/musicyt
           cp build/linux/musicyt.desktop debian/usr/share/applications/musicyt.desktop
           cp build/appicon.png debian/usr/share/pixmaps/musicyt.png
+          cp build/linux/musicyt.desktop.metainfo.xml debian/usr/share/metainfo/musicyt.desktop.metainfo.xml
           
           # 3. Điền phiên bản vào control file và đảm bảo UTF-8
           sed "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" build/linux/control.template > debian/DEBIAN/control
           
-          # Set quyền thực thi cho binary
+          # Set quyền thực thi cho các file
           chmod 755 debian/usr/bin/musicyt
+          chmod 644 debian/usr/share/applications/musicyt.desktop
+          chmod 644 debian/usr/share/pixmaps/musicyt.png
+          chmod 644 debian/usr/share/metainfo/musicyt.desktop.metainfo.xml
           
           # 4. Đóng gói .deb
           dpkg-deb --build debian musicyt_${VERSION_NUM}_amd64.deb

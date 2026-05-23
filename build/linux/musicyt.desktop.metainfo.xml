@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>musicyt.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>MusicYT</name>
+  <summary>Tải nhạc YouTube và đa nền tảng siêu nhẹ</summary>
+  <description>
+    <p>
+      MusicYT là ứng dụng tải nhạc YouTube và đa nền tảng siêu nhẹ, hiện đại với giao diện Glassmorphism và hỗ trợ đầy đủ tiếng Việt.
+    </p>
+  </description>
+  <launchable type="desktop-id">musicyt.desktop</launchable>
+  <icon type="stock">musicyt</icon>
+  <provides>
+    <binary>musicyt</binary>
+  </provides>
+</component>

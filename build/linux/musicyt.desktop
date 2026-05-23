@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=MusicYT
+Comment=Tải nhạc YouTube và đa nền tảng siêu nhẹ
+Exec=musicyt
+Icon=musicyt
+Terminal=false
+Type=Application
+Categories=Utility;AudioVideo;
+Encoding=UTF-8

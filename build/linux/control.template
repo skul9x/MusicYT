@@ -1,0 +1,9 @@
+Package: musicyt
+Version: VERSION_PLACEHOLDER
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: curl, zenity, fonts-dejavu, fonts-liberation, fonts-noto, libgtk-3-0, libwebkit2gtk-4.0-37 | libwebkit2gtk-4.1-0
+Maintainer: Nguyễn Duy Trường <skul9x@gmail.com>
+Description: MusicYT - YouTube Downloader Siêu Nhẹ
+ MusicYT là ứng dụng tải nhạc YouTube và đa nền tảng siêu nhẹ, hiện đại với giao diện Glassmorphism và hỗ trợ đầy đủ tiếng Việt.
