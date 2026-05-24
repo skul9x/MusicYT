@@ -1,9 +1,11 @@
 /// <reference path="../wailsjs/runtime/runtime.d.ts" />
 import { useState, useEffect } from 'react';
-import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath, OpenOutputFolder, CancelDownload, IsAppReady } from '../wailsjs/go/main/App';
+import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath, OpenOutputFolder, CancelDownload, IsAppReady, GetVideoInfo, NotifyDownloadComplete } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import InstallGuideModal from './components/InstallGuideModal';
 import UniversalDownloader from './components/UniversalDownloader';
+import { GlassToastContainer, toast } from './components/GlassToast';
+
 
 function App() {
     const [activeTab, setActiveTab] = useState<'youtube' | 'universal'>('youtube');
@@ -96,6 +98,15 @@ function App() {
         }
     };
 
+    const addToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info', folderPath?: string) => {
+        toast.show(title, message, type, folderPath);
+    };
+
+    const truncateTitle = (title: string, maxLength: number = 40): string => {
+        if (title.length <= maxLength) return title;
+        return title.substring(0, maxLength) + '...';
+    };
+
     const handleDownload = async () => {
         if (!url || !isValidYT(url)) {
             setStatusMessage("⚠️ Vui lòng nhập link YouTube hợp lệ!");
@@ -110,15 +121,35 @@ function App() {
         setProgress(0);
         setStatusMessage("🚀 Đang khởi tạo...");
 
+        let videoTitle = "Nhạc";
+        const titlePromise = GetVideoInfo(url)
+            .then((jsonStr) => {
+                try {
+                    const info = JSON.parse(jsonStr);
+                    return info.title || "Nhạc";
+                } catch {
+                    return "Nhạc";
+                }
+            })
+            .catch(() => "Nhạc");
+
         try {
             await DownloadVideo(url, saveLocation, format);
+            const resolvedTitle = await titlePromise;
+            const truncated = truncateTitle(resolvedTitle);
+
             setStatusMessage("🎉 Hoàn tất! Nhạc đã nằm trong máy anh.");
             setProgress(100);
+
+            addToast("Tải thành công! 🎉", `"${truncated}" đã được lưu vào máy.`, "success", saveLocation);
+            NotifyDownloadComplete("MusicYT - Hoàn tất tải", `"${truncated}" đã sẵn sàng tại: ` + saveLocation);
         } catch (err: any) {
             if (err.toString().includes("context canceled") || err.toString().includes("killed")) {
                 setStatusMessage("❌ Đã hủy tải nhạc theo yêu cầu.");
+                addToast("Đã hủy tải nhạc", "Quá trình tải đã dừng theo yêu cầu.", "info");
             } else {
                 setStatusMessage(`❌ Lỗi: ${err}`);
+                addToast("Lỗi tải nhạc", err.toString(), "error");
             }
         } finally {
             setIsDownloading(false);
@@ -332,6 +363,7 @@ function App() {
                                                 setStatusMessage={setStatusMessage}
                                                 appReady={appReady}
                                                 isSelectingPath={isSelectingPath}
+                                                addToast={addToast}
                             />
                         )}
                     </div>
@@ -369,6 +401,7 @@ function App() {
                     animation: gradient 3s ease infinite;
                 }
             `}</style>
+            <GlassToastContainer />
             {showGuide && (
                 <InstallGuideModal
                     detectedOs={depStatus.os}

@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -26,6 +28,14 @@ type App struct {
 	selectPathPanicForTest bool // true để giả lập panic khi chọn thư mục
 	dialogMu               sync.Mutex // ← THÊM MỚI: Bảo vệ chặn concurrent dialog calls
 	lastResolvedDefaultDir string     // ← THÊM MỚI: Dành cho Unit Test kiểm tra Bug 4
+	downloadMu             sync.Mutex
+	activeDownload         bool
+	downloadWg             sync.WaitGroup
+	emittedEvents          []struct {
+		Name string
+		Data []interface{}
+	}
+	eventsMu               sync.Mutex
 }
 
 // NewApp creates a new App application struct
@@ -227,6 +237,7 @@ func (a *App) DownloadFile(url string, dest string, eventName string) error {
 	buf := make([]byte, 1024*32) // 32KB
 	var downloaded int64
 	total := resp.ContentLength
+	lastProgress := -1
 
 	for {
 		n, err := resp.Body.Read(buf)
@@ -234,8 +245,12 @@ func (a *App) DownloadFile(url string, dest string, eventName string) error {
 			out.Write(buf[0:n])
 			downloaded += int64(n)
 			if total > 0 {
-				progress := float64(downloaded) / float64(total) * 100
-				a.emitEvent(eventName, progress)
+				progressVal := float64(downloaded) / float64(total) * 100
+				progressInt := int(progressVal)
+				if progressInt != lastProgress {
+					lastProgress = progressInt
+					a.emitEvent(eventName, float64(progressInt))
+				}
 			}
 		}
 		if err == io.EOF {
@@ -245,7 +260,9 @@ func (a *App) DownloadFile(url string, dest string, eventName string) error {
 			return err
 		}
 	}
-	a.emitEvent(eventName, 100.0)
+	if lastProgress != 100 {
+		a.emitEvent(eventName, 100.0)
+	}
 	return nil
 }
 
@@ -355,6 +372,25 @@ func (a *App) UpdateYtdlp() error {
 
 // DownloadVideo starts downloading the video from the given URL to the target path
 func (a *App) DownloadVideo(url string, savePath string, formatOption string) error {
+	a.CancelDownload()
+	a.downloadWg.Wait()
+
+	a.downloadMu.Lock()
+	if a.activeDownload {
+		a.downloadMu.Unlock()
+		return fmt.Errorf("đang có tiến trình tải hoạt động")
+	}
+	a.activeDownload = true
+	a.downloadWg.Add(1)
+	a.downloadMu.Unlock()
+
+	defer func() {
+		a.downloadMu.Lock()
+		a.activeDownload = false
+		a.downloadMu.Unlock()
+		a.downloadWg.Done()
+	}()
+
 	url = strings.TrimSpace(url)
 	savePath = strings.TrimSpace(savePath)
 
@@ -411,21 +447,27 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start yt-dlp: %v", err)
 	}
-
 	scanner := bufio.NewScanner(stdout)
 	reProgress := regexp.MustCompile(`\[download\]\s+([\d\.]+)%`)
 
 	go func() {
+		lastProgress := -1
 		for scanner.Scan() {
 			line := scanner.Text()
 			match := reProgress.FindStringSubmatch(line)
 			if len(match) > 1 {
-				progress := match[1]
-				a.emitEvent("download-progress", progress)
+				progressStr := match[1]
+				var progressVal float64
+				if _, err := fmt.Sscanf(progressStr, "%f", &progressVal); err == nil {
+					progressInt := int(math.Round(progressVal))
+					if progressInt > lastProgress {
+						lastProgress = progressInt
+						a.emitEvent("download-progress", fmt.Sprintf("%d", progressInt))
+					}
+				}
 			}
 		}
 	}()
-
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("yt-dlp error: %v", err)
 	}
@@ -449,6 +491,25 @@ func (a *App) GetVideoInfo(url string) (string, error) {
 
 // DownloadGenericVideo starts downloading video/audio from any platform supported by yt-dlp
 func (a *App) DownloadGenericVideo(url string, savePath string, formatOption string) error {
+	a.CancelDownload()
+	a.downloadWg.Wait()
+
+	a.downloadMu.Lock()
+	if a.activeDownload {
+		a.downloadMu.Unlock()
+		return fmt.Errorf("đang có tiến trình tải hoạt động")
+	}
+	a.activeDownload = true
+	a.downloadWg.Add(1)
+	a.downloadMu.Unlock()
+
+	defer func() {
+		a.downloadMu.Lock()
+		a.activeDownload = false
+		a.downloadMu.Unlock()
+		a.downloadWg.Done()
+	}()
+
 	url = strings.TrimSpace(url)
 	savePath = strings.TrimSpace(savePath)
 
@@ -503,21 +564,27 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start yt-dlp: %v", err)
 	}
-
 	scanner := bufio.NewScanner(stdout)
 	reProgress := regexp.MustCompile(`\[download\]\s+([\d\.]+)%`)
 
 	go func() {
+		lastProgress := -1
 		for scanner.Scan() {
 			line := scanner.Text()
 			match := reProgress.FindStringSubmatch(line)
 			if len(match) > 1 {
-				progress := match[1]
-				a.emitEvent("download-progress", progress)
+				progressStr := match[1]
+				var progressVal float64
+				if _, err := fmt.Sscanf(progressStr, "%f", &progressVal); err == nil {
+					progressInt := int(math.Round(progressVal))
+					if progressInt > lastProgress {
+						lastProgress = progressInt
+						a.emitEvent("download-progress", fmt.Sprintf("%d", progressInt))
+					}
+				}
 			}
 		}
 	}()
-
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("yt-dlp error: %v", err)
 	}
@@ -550,6 +617,13 @@ func (a *App) GetGenericVideoInfo(url string) (string, error) {
 
 // emitEvent is a helper to safely call EventsEmit and recover from any panic when running in test mode
 func (a *App) emitEvent(name string, optionalData ...interface{}) {
+	a.eventsMu.Lock()
+	a.emittedEvents = append(a.emittedEvents, struct {
+		Name string
+		Data []interface{}
+	}{Name: name, Data: optionalData})
+	a.eventsMu.Unlock()
+
 	if a.ctx == nil || a.ctx.Value("is_test") == true {
 		return
 	}
@@ -559,5 +633,82 @@ func (a *App) emitEvent(name string, optionalData ...interface{}) {
 		}
 	}()
 	wailsRuntime.EventsEmit(a.ctx, name, optionalData...)
+}
+
+// NotifyDownloadComplete gửi thông báo hệ thống native OS (Windows/macOS/Linux) bất đồng bộ
+func (a *App) NotifyDownloadComplete(title string, message string) {
+	go func() {
+		_ = a.execNotification(title, message)
+	}()
+}
+
+// execNotification thực thi hiển thị thông báo native OS đồng bộ
+func (a *App) execNotification(title string, message string) error {
+	title = strings.TrimSpace(title)
+	message = strings.TrimSpace(message)
+
+	switch runtime.GOOS {
+	case "windows":
+		escapedTitle := xmlEscape(title)
+		escapedMessage := xmlEscape(message)
+
+		psScript := fmt.Sprintf(`[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+$AppId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+[xml]$ToastTemplate = @"
+<toast>
+    <visual>
+        <binding template="ToastGeneric">
+            <text>%s</text>
+            <text>%s</text>
+        </binding>
+    </visual>
+</toast>
+"@
+$ToastXml = [Windows.Data.Xml.Dom.XmlDocument]::New()
+$ToastXml.LoadXml($ToastTemplate.OuterXml)
+$Toast = [Windows.UI.Notifications.ToastNotification]::new($ToastXml)
+$Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($AppId)
+$Notifier.Show($Toast)`, escapedTitle, escapedMessage)
+
+		encodedCmd := encodePowerShellCommand(psScript)
+		cmd := exec.Command("powershell", "-NoProfile", "-EncodedCommand", encodedCmd)
+		prepareCommand(cmd)
+		return cmd.Run()
+
+	case "darwin":
+		cmd := exec.Command("osascript", "-e", fmt.Sprintf("display notification %q with title %q", message, title))
+		prepareCommand(cmd)
+		return cmd.Run()
+
+	case "linux":
+		cmd := exec.Command("notify-send", title, message)
+		prepareCommand(cmd)
+		return cmd.Run()
+
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+}
+
+// xmlEscape hỗ trợ escape các ký tự đặc biệt trong XML của Windows Toast
+func xmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	s = strings.ReplaceAll(s, "'", "&apos;")
+	return s
+}
+
+// encodePowerShellCommand mã hóa một script PowerShell sang định dạng base64 UTF-16LE để gọi an toàn
+func encodePowerShellCommand(cmd string) string {
+	var runes []rune = []rune(cmd)
+	encoded := make([]byte, len(runes)*2)
+	for i, r := range runes {
+		encoded[i*2] = byte(r)
+		encoded[i*2+1] = byte(r >> 8)
+	}
+	return base64.StdEncoding.EncodeToString(encoded)
 }
 

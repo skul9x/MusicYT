@@ -20,6 +20,8 @@ export function GetVideoInfo(arg1:string):Promise<string>;
 
 export function IsAppReady():Promise<boolean>;
 
+export function NotifyDownloadComplete(arg1:string,arg2:string):Promise<void>;
+
 export function OpenOutputFolder(arg1:string):Promise<void>;
 
 export function SelectSavePath(arg1:string):Promise<string>;

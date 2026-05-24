@@ -38,6 +38,10 @@ export function IsAppReady() {
   return window['go']['main']['App']['IsAppReady']();
 }
 
+export function NotifyDownloadComplete(arg1, arg2) {
+  return window['go']['main']['App']['NotifyDownloadComplete'](arg1, arg2);
+}
+
 export function OpenOutputFolder(arg1) {
   return window['go']['main']['App']['OpenOutputFolder'](arg1);
 }

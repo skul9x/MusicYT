@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DownloadGenericVideo, OpenOutputFolder, CancelDownload } from '../../wailsjs/go/main/App';
+import { DownloadGenericVideo, OpenOutputFolder, CancelDownload, GetGenericVideoInfo, NotifyDownloadComplete } from '../../wailsjs/go/main/App';
 
 interface Props {
     saveLocation: string;
@@ -12,6 +12,7 @@ interface Props {
     setStatusMessage: (val: string) => void;
     appReady: boolean;
     isSelectingPath: boolean;
+    addToast: (title: string, message: string, type?: 'success' | 'error' | 'info', folderPath?: string) => void;
 }
 
 export default function UniversalDownloader({
@@ -24,7 +25,8 @@ export default function UniversalDownloader({
     depStatus,
     setStatusMessage,
     appReady,
-    isSelectingPath
+    isSelectingPath,
+    addToast
 }: Props) {
     const [url, setUrl] = useState('');
     const [format, setFormat] = useState('m4a_cover'); // 'best' (video), 'm4a' (audio only), 'm4a_cover' (audio + cover art)
@@ -43,6 +45,11 @@ export default function UniversalDownloader({
 
     const platform = detectPlatform(url);
 
+    const truncateTitle = (title: string, maxLength: number = 40): string => {
+        if (title.length <= maxLength) return title;
+        return title.substring(0, maxLength) + '...';
+    };
+
     const handleDownload = async () => {
         if (!url.trim()) {
             setStatusMessage("⚠️ Vui lòng nhập link video!");
@@ -57,21 +64,45 @@ export default function UniversalDownloader({
         setProgress(0);
         setStatusMessage("🚀 Đang phân tích link & kết nối...");
 
+        let videoTitle = "Video";
+        const titlePromise = GetGenericVideoInfo(url.trim())
+            .then((jsonStr) => {
+                try {
+                    const info = JSON.parse(jsonStr);
+                    return info.title || "Video";
+                } catch {
+                    return "Video";
+                }
+            })
+            .catch(() => "Video");
+
         try {
             await DownloadGenericVideo(url.trim(), saveLocation, format);
+            const resolvedTitle = await titlePromise;
+            const truncated = truncateTitle(resolvedTitle);
+
+            let msg = `"${truncated}" đã được lưu vào máy.`;
             if (format === 'm4a_cover') {
                 setStatusMessage("🎉 Hoàn tất! Nhạc + Cover Art đã tải về máy anh.");
+                msg = `"${truncated}" (Nhạc + Cover Art) đã được lưu vào máy.`;
             } else if (format === 'm4a') {
                 setStatusMessage("🎉 Hoàn tất! File nhạc đã tải về máy anh.");
+                msg = `"${truncated}" (Nhạc) đã được lưu vào máy.`;
             } else {
                 setStatusMessage("🎉 Hoàn tất! Video đã tải về máy anh.");
+                msg = `"${truncated}" (Video) đã được lưu vào máy.`;
             }
             setProgress(100);
+
+            addToast("Tải thành công! 🎉", msg, "success", saveLocation);
+            NotifyDownloadComplete("MusicYT - Hoàn tất tải", `"${truncated}" đã sẵn sàng tại: ` + saveLocation);
         } catch (err: any) {
             if (err.toString().includes("context canceled") || err.toString().includes("killed")) {
                 setStatusMessage("❌ Đã hủy tải video theo yêu cầu.");
+                addToast("Đã hủy tải", "Quá trình tải đã dừng theo yêu cầu.", "info");
             } else {
                 setStatusMessage(`❌ Lỗi: ${err}`);
+                addToast("Lỗi tải xuống", err.toString(), "error");
             }
         } finally {
             setIsDownloading(false);

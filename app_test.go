@@ -294,5 +294,33 @@ func TestSelectSavePath_MutexLock(t *testing.T) {
 	}
 }
 
+func TestNotifyDownloadComplete(t *testing.T) {
+	app := NewApp()
+
+	// Đảm bảo không crash trên bất kỳ môi trường nào
+	// Test chuỗi ký tự đặc biệt, dấu ngoặc kép và Emoji
+	title := "Test Title 'with quotes' & <XML> tags"
+	message := "Test Message \"with double quotes\" 🎉"
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("NotifyDownloadComplete panicked: %v", r)
+		}
+	}()
+
+	// Chạy thử NotifyDownloadComplete (bất đồng bộ)
+	app.NotifyDownloadComplete(title, message)
+
+	// Chạy thử execNotification (đồng bộ) để kiểm nghiệm tính ổn định
+	err := app.execNotification(title, message)
+	if err != nil {
+		// Log lỗi thay vì fail vì trên CI Linux/headless có thể thiếu notify-send hoặc trên windows không có phiên làm việc GUI
+		t.Logf("execNotification returned error (expected on headless CI): %v", err)
+	} else {
+		t.Log("execNotification executed successfully")
+	}
+}
+
+
 
 
