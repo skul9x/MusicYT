@@ -525,7 +525,8 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 	case "m4a":
 		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a")
 	case "m4a_cover":
-		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a", "--embed-thumbnail", "--convert-thumbnails", "jpg")
+		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a",
+			"--write-all-thumbnails", "--convert-thumbnails", "jpg", "--no-embed-thumbnail")
 	case "best":
 		fallthrough
 	default:
@@ -587,6 +588,102 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 	}()
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("yt-dlp error: %v", err)
+	}
+
+	// THÊM MỚI: Nhúng cover thủ công cho TikTok
+	if formatOption == "m4a_cover" {
+		if err := a.embedTikTokCover(savePath); err != nil {
+			return fmt.Errorf("lỗi nhúng cover art: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *App) embedTikTokCover(savePath string) error {
+	// Check if ffmpeg is available in PATH first
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		fmt.Printf("Warning: ffmpeg not found in PATH, skipping cover embedding to keep original m4a: %v\n", err)
+		return nil
+	}
+
+	// 1. Quét thư mục savePath để tìm các file *.m4a
+	files, err := os.ReadDir(savePath)
+	if err != nil {
+		return fmt.Errorf("failed to read save directory: %v", err)
+	}
+
+	m4aFiles := make(map[string]string)
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		name := file.Name()
+		if strings.HasSuffix(name, ".m4a") {
+			baseName := strings.TrimSuffix(name, ".m4a")
+			m4aFiles[baseName] = filepath.Join(savePath, name)
+		}
+	}
+
+	// 2. Với mỗi file .m4a, tìm ảnh bìa tương ứng (có hỗ trợ fallback)
+	for baseName, m4aPath := range m4aFiles {
+		var coverPath string
+		candidates := []string{
+			baseName + ".cover.jpg",
+			baseName + ".dynamicCover.jpg",
+			baseName + ".originCover.jpg",
+		}
+
+		for _, candidate := range candidates {
+			candidatePath := filepath.Join(savePath, candidate)
+			if _, err := os.Stat(candidatePath); err == nil {
+				coverPath = candidatePath
+				break
+			}
+		}
+
+		// Nếu không tìm thấy file ảnh bìa nào, bỏ qua nhẹ nhàng
+		if coverPath == "" {
+			fmt.Printf("Warning: no cover image found for %s, skipping embedding\n", baseName)
+			continue
+		}
+
+		tempOutPath := filepath.Join(savePath, baseName+"_temp_embed.m4a")
+
+		// 3. Thực thi ffmpeg nhúng cover art
+		cmd := exec.Command("ffmpeg", "-i", m4aPath, "-i", coverPath,
+			"-map", "0:a", "-map", "1:v",
+			"-c:a", "copy", "-c:v:0", "mjpeg",
+			"-disposition:v", "attached_pic",
+			tempOutPath, "-y")
+
+		prepareCommand(cmd)
+
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: failed to run ffmpeg embed command for %s: %v\n", baseName, err)
+			_ = os.Remove(tempOutPath)
+			continue
+		}
+
+		// 4. Ghi đè file temp lên file gốc
+		if err := os.Rename(tempOutPath, m4aPath); err != nil {
+			fmt.Printf("Warning: failed to replace original file for %s: %v\n", baseName, err)
+			_ = os.Remove(tempOutPath)
+			continue
+		}
+	}
+
+	// 5. Dọn dẹp sạch sẽ các file ảnh thumbnail tạm thời (cover, originCover, dynamicCover)
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		name := file.Name()
+		if strings.HasSuffix(name, ".cover.jpg") ||
+			strings.HasSuffix(name, ".originCover.jpg") ||
+			strings.HasSuffix(name, ".dynamicCover.jpg") {
+			_ = os.Remove(filepath.Join(savePath, name))
+		}
 	}
 
 	return nil
