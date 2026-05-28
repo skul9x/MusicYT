@@ -14,24 +14,24 @@ export function DownloadFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['DownloadFile'](arg1, arg2, arg3);
 }
 
-export function DownloadGenericVideo(arg1, arg2, arg3) {
-  return window['go']['main']['App']['DownloadGenericVideo'](arg1, arg2, arg3);
+export function DownloadGenericVideo(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DownloadGenericVideo'](arg1, arg2, arg3, arg4);
 }
 
-export function DownloadVideo(arg1, arg2, arg3) {
-  return window['go']['main']['App']['DownloadVideo'](arg1, arg2, arg3);
+export function DownloadVideo(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DownloadVideo'](arg1, arg2, arg3, arg4);
 }
 
 export function GetDefaultSavePath() {
   return window['go']['main']['App']['GetDefaultSavePath']();
 }
 
-export function GetGenericVideoInfo(arg1) {
-  return window['go']['main']['App']['GetGenericVideoInfo'](arg1);
+export function GetGenericVideoInfo(arg1, arg2) {
+  return window['go']['main']['App']['GetGenericVideoInfo'](arg1, arg2);
 }
 
-export function GetVideoInfo(arg1) {
-  return window['go']['main']['App']['GetVideoInfo'](arg1);
+export function GetVideoInfo(arg1, arg2) {
+  return window['go']['main']['App']['GetVideoInfo'](arg1, arg2);
 }
 
 export function IsAppReady() {
@@ -44,6 +44,10 @@ export function NotifyDownloadComplete(arg1, arg2) {
 
 export function OpenOutputFolder(arg1) {
   return window['go']['main']['App']['OpenOutputFolder'](arg1);
+}
+
+export function SelectCookiesFile() {
+  return window['go']['main']['App']['SelectCookiesFile']();
 }
 
 export function SelectSavePath(arg1) {

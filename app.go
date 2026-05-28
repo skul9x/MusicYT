@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -371,7 +372,7 @@ func (a *App) UpdateYtdlp() error {
 }
 
 // DownloadVideo starts downloading the video from the given URL to the target path
-func (a *App) DownloadVideo(url string, savePath string, formatOption string) error {
+func (a *App) DownloadVideo(url string, savePath string, formatOption string, cookiesFile string) error {
 	a.CancelDownload()
 	a.downloadWg.Wait()
 
@@ -400,6 +401,8 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 		"--no-playlist",
 		"--newline",
 	}
+
+	args = append(args, a.buildCookiesArgs(cookiesFile)...)
 
 	// Format selection logic
 	switch formatOption {
@@ -444,6 +447,9 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 		return fmt.Errorf("failed to get stdout: %v", err)
 	}
 
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start yt-dlp: %v", err)
 	}
@@ -469,20 +475,27 @@ func (a *App) DownloadVideo(url string, savePath string, formatOption string) er
 		}
 	}()
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("yt-dlp error: %v", err)
+		return fmt.Errorf("yt-dlp error: %v. Stderr: %s", err, stderrBuf.String())
 	}
 
 	return nil
 }
 
 // GetVideoInfo fetches metadata for the given URL
-func (a *App) GetVideoInfo(url string) (string, error) {
+func (a *App) GetVideoInfo(url string, cookiesFile string) (string, error) {
 	// Command: yt-dlp --dump-json --no-playlist [URL]
-	cmd := exec.Command("yt-dlp", "--dump-json", "--no-playlist", url)
+	args := []string{"--dump-json", "--no-playlist"}
+	args = append(args, a.buildCookiesArgs(cookiesFile)...)
+	args = append(args, url)
+
+	cmd := exec.Command("yt-dlp", args...)
 	prepareCommand(cmd)
 	
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("failed to fetch video info: %v. Stderr: %s", err, string(exitErr.Stderr))
+		}
 		return "", fmt.Errorf("failed to fetch video info: %v", err)
 	}
 
@@ -490,7 +503,7 @@ func (a *App) GetVideoInfo(url string) (string, error) {
 }
 
 // DownloadGenericVideo starts downloading video/audio from any platform supported by yt-dlp
-func (a *App) DownloadGenericVideo(url string, savePath string, formatOption string) error {
+func (a *App) DownloadGenericVideo(url string, savePath string, formatOption string, cookiesFile string) error {
 	a.CancelDownload()
 	a.downloadWg.Wait()
 
@@ -520,13 +533,15 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 		"--newline",
 	}
 
+	args = append(args, a.buildCookiesArgs(cookiesFile)...)
+
 	// Format selection logic
 	switch formatOption {
 	case "m4a":
 		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a")
 	case "m4a_cover":
 		args = append(args, "-f", "best[vcodec^=h264]/best", "-x", "--audio-format", "m4a",
-			"--write-all-thumbnails", "--convert-thumbnails", "jpg", "--no-embed-thumbnail")
+			"--write-all-thumbnails", "--no-embed-thumbnail")
 	case "best":
 		fallthrough
 	default:
@@ -562,6 +577,9 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 		return fmt.Errorf("failed to get stdout: %v", err)
 	}
 
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start yt-dlp: %v", err)
 	}
@@ -587,7 +605,7 @@ func (a *App) DownloadGenericVideo(url string, savePath string, formatOption str
 		}
 	}()
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("yt-dlp error: %v", err)
+		return fmt.Errorf("yt-dlp error: %v. Stderr: %s", err, stderrBuf.String())
 	}
 
 	// THÊM MỚI: Nhúng cover thủ công cho TikTok
@@ -629,9 +647,14 @@ func (a *App) embedTikTokCover(savePath string) error {
 	for baseName, m4aPath := range m4aFiles {
 		var coverPath string
 		candidates := []string{
+			baseName + ".jpg",
+			baseName + ".png",
 			baseName + ".cover.jpg",
 			baseName + ".dynamicCover.jpg",
 			baseName + ".originCover.jpg",
+			baseName + ".cover.image",
+			baseName + ".originCover.image",
+			baseName + ".dynamicCover.image",
 		}
 
 		for _, candidate := range candidates {
@@ -673,15 +696,27 @@ func (a *App) embedTikTokCover(savePath string) error {
 		}
 	}
 
-	// 5. Dọn dẹp sạch sẽ các file ảnh thumbnail tạm thời (cover, originCover, dynamicCover)
+	// 5. Dọn dẹp sạch sẽ các file ảnh thumbnail tạm thời (bao gồm cả file ảnh bìa đơn .jpg/.png)
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
 		name := file.Name()
-		if strings.HasSuffix(name, ".cover.jpg") ||
-			strings.HasSuffix(name, ".originCover.jpg") ||
-			strings.HasSuffix(name, ".dynamicCover.jpg") {
+		// Chỉ xóa các file ảnh thumbnail tạm có tên bắt đầu bằng baseName của file nhạc đang tải để tránh xóa nhầm dữ liệu người dùng
+		isLeftoverThumbnail := false
+		for baseName := range m4aFiles {
+			if strings.HasPrefix(name, baseName) && (strings.HasSuffix(name, ".jpg") ||
+				strings.HasSuffix(name, ".png") ||
+				strings.HasSuffix(name, ".webp") ||
+				strings.HasSuffix(name, ".image") ||
+				strings.HasSuffix(name, ".cover.jpg") ||
+				strings.HasSuffix(name, ".originCover.jpg") ||
+				strings.HasSuffix(name, ".dynamicCover.jpg")) {
+				isLeftoverThumbnail = true
+				break
+			}
+		}
+		if isLeftoverThumbnail {
 			_ = os.Remove(filepath.Join(savePath, name))
 		}
 	}
@@ -700,12 +735,19 @@ func (a *App) CancelDownload() {
 }
 
 // GetGenericVideoInfo fetches metadata for any supported URL
-func (a *App) GetGenericVideoInfo(url string) (string, error) {
-	cmd := exec.Command("yt-dlp", "--dump-json", "--no-playlist", url)
+func (a *App) GetGenericVideoInfo(url string, cookiesFile string) (string, error) {
+	args := []string{"--dump-json", "--no-playlist"}
+	args = append(args, a.buildCookiesArgs(cookiesFile)...)
+	args = append(args, url)
+
+	cmd := exec.Command("yt-dlp", args...)
 	prepareCommand(cmd)
 	
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("failed to fetch video info: %v. Stderr: %s", err, string(exitErr.Stderr))
+		}
 		return "", fmt.Errorf("failed to fetch video info: %v", err)
 	}
 
@@ -807,5 +849,32 @@ func encodePowerShellCommand(cmd string) string {
 		encoded[i*2+1] = byte(r >> 8)
 	}
 	return base64.StdEncoding.EncodeToString(encoded)
+}
+
+func (a *App) buildCookiesArgs(cookiesFile string) []string {
+	if cookiesFile == "" {
+		return []string{}
+	}
+	// Kiểm tra xem file có tồn tại không
+	if _, err := os.Stat(cookiesFile); os.IsNotExist(err) {
+		return []string{}
+	}
+	return []string{"--cookies", cookiesFile}
+}
+
+func (a *App) SelectCookiesFile() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("ứng dụng chưa khởi tạo ngữ cảnh")
+	}
+	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Chọn file cookies.txt",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return filePath, nil
 }
 

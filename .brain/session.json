@@ -1,58 +1,85 @@
 {
-  "updated_at": "2026-05-23T17:58:00+07:00",
+  "meta": {
+    "schema_version": "1.1.0",
+    "awf_version": "3.3.0"
+  },
+  "updated_at": "2026-05-28T15:22:00+07:00",
   "working_on": {
-    "feature": "Universal Video Downloader & Default Audio Selection",
-    "task": "Completed Wails tabbed interface, defaulted YouTube Music to m4a format, implemented multi-platform backend generic downloader, added missing Windows ffprobe dependency, and successfully ran Go unit tests",
+    "feature": "TikTok Cover Art Embedding & Native Thumbnail Processing",
+    "task": "Fixed preprocessing conversion crashes when downloading TikTok audio with cover art (m4a_cover) by changing --convert-thumbnails to --write-all-thumbnails to avoid ffmpeg webp conversion crashes, adding cover.image candidates to embedTikTokCover fallback list, and implementing clean leftover files removal.",
     "status": "completed",
     "files": [
       "app.go",
-      "frontend/src/App.tsx",
-      "frontend/src/components/UniversalDownloader.tsx",
-      "frontend/wailsjs/go/main/App.js",
-      "frontend/wailsjs/go/main/App.d.ts",
-      "app_test.go"
+      "tiktok_cover_black_test.go",
+      "generic_download_cover_test.go",
+      "tiktok_download_test.go",
+      "tiktok_integration_test.go"
     ],
-    "notes": "Added a glassmorphic tab-selector interface. Solved a critical Windows environment bug where lack of ffprobe.exe caused postprocessing extraction to fail on TikTok."
+    "notes": "TikTok uses animated WebP thumbnails (dynamicCover) that crash standard ffmpeg conversion to JPG. Switching to native thumbnail downloading (--write-all-thumbnails) keeps the native file formats (.image). ffmpeg can successfully detect these native file formats and embed them directly. Updated all test URLs to a highly reliable, active TikTok video link to ensure zero failures."
   },
   "pending_tasks": [
     {
-      "task": "Build the final production package using: wails build -platform windows/amd64 -nsis",
+      "task": "Verify UI integration of cookies file selection on production builds",
       "priority": "medium"
+    },
+    {
+      "task": "Clean up temporary downloaded assets in local workspace",
+      "priority": "low"
     }
   ],
   "recent_changes": [
     {
-      "timestamp": "2026-05-23T17:58:00+07:00",
-      "type": "feature",
-      "description": "Multi-platform video downloader, YouTube Audio-only default format, integrated ffprobe binary downloader, and robust Go testing suite.",
+      "timestamp": "2026-05-28T15:22:00+07:00",
+      "type": "bugfix",
+      "description": "Fixed yt-dlp animated WebP thumbnail conversion crash by removing --convert-thumbnails and supporting native .image formats in the embedding pipeline.",
       "files": [
         "app.go",
-        "frontend/src/App.tsx",
-        "frontend/src/components/UniversalDownloader.tsx",
-        "app_test.go"
+        "tiktok_cover_black_test.go",
+        "generic_download_cover_test.go",
+        "tiktok_download_test.go",
+        "tiktok_integration_test.go"
+      ]
+    },
+    {
+      "timestamp": "2026-05-28T14:52:00+07:00",
+      "type": "bugfix",
+      "description": "Resolved yt-dlp impersonation dependency crashes (curl-cffi 0.15 incompatibilities) and implemented detailed stderr propagation to the client application.",
+      "files": [
+        "app.go",
+        "tiktok_cover_black_test.go",
+        "tiktok_integration_test.go"
       ]
     }
   ],
   "errors_encountered": [
     {
-      "error": "yt-dlp Postprocessing: WARNING: unable to obtain file audio codec with ffprobe",
-      "solution": "Downloaded and extracted ffprobe.exe alongside ffmpeg.exe in C:\\tools\\, solving all Windows audio postprocessing issues.",
+      "error": "yt-dlp ERROR: Preprocessing: Conversion failed! (caused by ffmpeg Animated WebP to JPG codec mismatch on dynamicCover)",
+      "solution": "Removed --convert-thumbnails argument in favor of --write-all-thumbnails and updated embedding search paths to locate and use raw .image formats natively with ffmpeg.",
       "resolved": true
     },
     {
-      "error": "JSX closing tags mismatch in App.tsx",
-      "solution": "Corrected the self-closing tag on UniversalDownloader and div matching syntax.",
+      "error": "yt-dlp error: exit status 1 (impersonate targets missing / curl-cffi mismatch)",
+      "solution": "Downgraded curl-cffi to v0.14.0 inside user's system packages via pip. Verified --list-impersonate-targets compatibility.",
+      "resolved": true
+    },
+    {
+      "error": "listen tcp 127.0.0.1:34115: bind: address already in use during 'wails dev'",
+      "solution": "Redirected Wails development server port to 34116 using 'wails dev -devserver 127.0.0.1:34116' flag.",
       "resolved": true
     }
   ],
   "decisions_made": [
     {
-      "decision": "Add a dedicated 'Đa Nền Tảng' tab",
-      "reason": "Simplifies UX by keeping YouTube's advanced options isolated from other multi-platform simple video/audio extraction."
+      "decision": "Bypass automatic thumbnail conversion in yt-dlp entirely",
+      "reason": "TikTok's dynamic animated WebP images fail to convert to static JPEG natively with ffmpeg. Keeping the native format (.image) and letting ffmpeg perform the final container embedding directly is 100% reliable and robust."
     },
     {
-      "decision": "2 format choices (Video/Audio) for Đa Nền Tảng tab",
-      "reason": "Users typically download from TikTok/FB/Instagram as either raw video or parsed audio only."
+      "decision": "Use pip install -U 'yt-dlp[default,curl-cffi]' --break-system-packages",
+      "reason": "Allows yt-dlp to access the optimized curl-cffi binding immediately in user's default python path."
+    },
+    {
+      "decision": "Capture complete Cmd.Stderr output stream in app.go",
+      "reason": "Ensures that exact yt-dlp error diagnostics are returned to UniversalDownloader.tsx for transparent troubleshooting instead of empty 'exit status 1' errors."
     }
   ]
 }

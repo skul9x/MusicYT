@@ -1,6 +1,6 @@
 /// <reference path="../wailsjs/runtime/runtime.d.ts" />
 import { useState, useEffect } from 'react';
-import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath, OpenOutputFolder, CancelDownload, IsAppReady, GetVideoInfo, NotifyDownloadComplete } from '../wailsjs/go/main/App';
+import { CheckDependencies, SelectSavePath, DownloadVideo, GetDefaultSavePath, OpenOutputFolder, CancelDownload, IsAppReady, GetVideoInfo, NotifyDownloadComplete, SelectCookiesFile } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import InstallGuideModal from './components/InstallGuideModal';
 import UniversalDownloader from './components/UniversalDownloader';
@@ -19,6 +19,24 @@ function App() {
     const [showGuide, setShowGuide] = useState(false);
     const [appReady, setAppReady] = useState(false);
     const [isSelectingPath, setIsSelectingPath] = useState(false);
+    const [enableCookies, setEnableCookies] = useState<boolean>(
+        localStorage.getItem("music_yt_enable_cookies") === "true"
+    );
+    const [cookiesPath, setCookiesPath] = useState<string>(
+        localStorage.getItem("music_yt_cookies_file_path") || ""
+    );
+
+    const handleSelectCookiesFile = async () => {
+        try {
+            const path = await SelectCookiesFile();
+            if (path) {
+                setCookiesPath(path);
+                localStorage.setItem("music_yt_cookies_file_path", path);
+            }
+        } catch (err) {
+            console.error("Lỗi chọn file:", err);
+        }
+    };
 
     useEffect(() => {
         const checkDeps = async () => {
@@ -122,7 +140,8 @@ function App() {
         setStatusMessage("🚀 Đang khởi tạo...");
 
         let videoTitle = "Nhạc";
-        const titlePromise = GetVideoInfo(url)
+        const cookieToPass = enableCookies ? cookiesPath : "";
+        const titlePromise = GetVideoInfo(url, cookieToPass)
             .then((jsonStr) => {
                 try {
                     const info = JSON.parse(jsonStr);
@@ -134,7 +153,7 @@ function App() {
             .catch(() => "Nhạc");
 
         try {
-            await DownloadVideo(url, saveLocation, format);
+            await DownloadVideo(url, saveLocation, format, cookieToPass);
             const resolvedTitle = await titlePromise;
             const truncated = truncateTitle(resolvedTitle);
 
@@ -309,6 +328,79 @@ function App() {
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+
+                                {/* Cookies Bypass Settings */}
+                                <div className="space-y-4 bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-md">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                                🛡️ Vượt chặn bảo mật bằng Cookies
+                                            </label>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                                                Bypass TikTok & YouTube anti-bot
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                const newValue = !enableCookies;
+                                                setEnableCookies(newValue);
+                                                localStorage.setItem("music_yt_enable_cookies", newValue ? "true" : "false");
+                                            }}
+                                            disabled={isDownloading}
+                                            className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 focus:outline-none ${
+                                                enableCookies ? 'bg-emerald-500' : 'bg-slate-800'
+                                            }`}
+                                        >
+                                            <div
+                                                className={`bg-black w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                                                    enableCookies ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+
+                                    {enableCookies && (
+                                        <div className="space-y-3 pt-2 border-t border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tệp cookies.txt</span>
+                                                <div className="flex items-center gap-3">
+                                                    {cookiesPath && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setCookiesPath("");
+                                                                localStorage.removeItem("music_yt_cookies_file_path");
+                                                            }}
+                                                            disabled={isDownloading}
+                                                            className="text-[11px] font-black text-rose-400 hover:text-rose-300 transition-colors uppercase tracking-widest border-b border-rose-500/30 border-dashed"
+                                                        >
+                                                            ❌ Xóa
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={handleSelectCookiesFile}
+                                                        disabled={isDownloading}
+                                                        className="text-[11px] font-black text-emerald-400 hover:text-emerald-300 transition-colors uppercase tracking-widest border-b border-emerald-500/30 border-dashed"
+                                                    >
+                                                        {cookiesPath ? "Thay đổi" : "Chọn file"}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-black/20 rounded-xl px-4 py-3 flex items-center gap-3 border border-white/5">
+                                                <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <span className="text-xs text-slate-400 truncate font-mono select-all">
+                                                    {cookiesPath || "Chưa chọn tệp cookies.txt..."}
+                                                </span>
+                                            </div>
+
+                                            <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                                                💡 <span className="font-bold text-slate-400">Cách lấy:</span> Cài extension <span className="text-cyan-400 font-bold">"Get cookies.txt LOCALLY"</span> trên Chrome/Firefox/Edge, đăng nhập YouTube, xuất file <span className="font-mono">cookies.txt</span> rồi chọn file đó tại đây.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Progress or Button */}

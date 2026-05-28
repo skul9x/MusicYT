@@ -8,21 +8,23 @@ export function CheckDependencies():Promise<main.DependencyStatus>;
 
 export function DownloadFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function DownloadGenericVideo(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function DownloadGenericVideo(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function DownloadVideo(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function DownloadVideo(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function GetDefaultSavePath():Promise<string>;
 
-export function GetGenericVideoInfo(arg1:string):Promise<string>;
+export function GetGenericVideoInfo(arg1:string,arg2:string):Promise<string>;
 
-export function GetVideoInfo(arg1:string):Promise<string>;
+export function GetVideoInfo(arg1:string,arg2:string):Promise<string>;
 
 export function IsAppReady():Promise<boolean>;
 
 export function NotifyDownloadComplete(arg1:string,arg2:string):Promise<void>;
 
 export function OpenOutputFolder(arg1:string):Promise<void>;
+
+export function SelectCookiesFile():Promise<string>;
 
 export function SelectSavePath(arg1:string):Promise<string>;
 

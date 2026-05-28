@@ -11,7 +11,7 @@
   "tech_stack": {
     "frontend": "React 18 + TypeScript + Tailwind CSS",
     "backend": "Go (Wails v2.12.0)",
-    "engine": "yt-dlp + ffmpeg + ffprobe",
+    "engine": "yt-dlp + ffmpeg + ffprobe + curl-cffi 0.14.0",
     "formatting": "m4a (audio only), mp4 (video)"
   },
   "features": [
@@ -26,6 +26,9 @@
     "Automated dependency installer (Win/Linux)",
     "Auto-update engine (yt-dlp -U)",
     "One-click fix for downloader errors",
-    "Automatic ffprobe downloader for audio extraction support on Windows"
+    "Automatic ffprobe downloader for audio extraction support on Windows",
+    "🛡️ Cookies Bypass Authentication (Bypass TikTok & YouTube anti-bot using Netscape cookies.txt)",
+    "Detailed Stderr capturing from yt-dlp on Go Backend for robust error reporting",
+    "Automatic embed cover art using native thumbnail formats (.image) for TikTok videos to prevent animated WebP conversion crashes"
   ]
 }

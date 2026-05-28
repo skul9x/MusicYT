@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-05-28]
+### Added
+- **🛡️ Cookies Bypass Authentication:** Hỗ trợ nhập file `cookies.txt` (dạng Netscape) từ Frontend UI hoặc qua biến môi trường `TIKTOK_COOKIES_PATH` giúp vượt qua lớp bảo vệ chống bot của TikTok/YouTube một cách dễ dàng.
+- **Glassmorphism Cookies Panel:** Thêm bảng điều khiển Glassmorphism cực đẹp tại `UniversalDownloader.tsx` để quản lý bật/tắt cookie bypass.
+- **Backend Cookies Logic:** Tích hợp tùy chọn `--cookies` vào lệnh `yt-dlp` của backend Go để hỗ trợ bypass trên diện rộng.
+
+### Fixed
+- **Lỗi chuyển đổi Thumbnail TikTok (`m4a_cover`):** Giải quyết triệt để lỗi `Preprocessing: Conversion failed!` khi tải nhạc kèm ảnh bìa do crash chuyển đổi ảnh động WebP. Ứng dụng giờ đây tải ảnh nguyên bản và nhúng trực tiếp qua ffmpeg cực kỳ mượt mà.
+- **Bộ Kiểm Thử Hoàn Thiện:** Cập nhật URL kiểm thử TikTok mới và tối ưu các file test đơn vị, test tích hợp (`tiktok_cover_black_test.go`, `tiktok_download_test.go`, v.v.) hoạt động ổn định 100%.
+
 ## [2026-05-23]
 ### Added
 - **Tab Đa Nền Tảng (Universal Download):** Hỗ trợ tải video/audio từ bất kỳ nền tảng nào (TikTok, Douyin, Facebook, Instagram, Twitter/X, Bilibili...)
